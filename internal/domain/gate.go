@@ -18,17 +18,35 @@ const (
 var gateIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{2,31}$`)
 
 type Gate struct {
-	ID              string
-	Name            string
-	Status          GateStatus
-	Aperture        float64
-	MaxAperture     float64
-	ActiveCommandID string
-	UpdatedAt       time.Time
-	Version         int64
+	ID                      string
+	Name                    string
+	Status                  GateStatus
+	Aperture                float64
+	MaxAperture             float64
+	ActiveCommandID         string
+	AdjustmentWindowSeconds int64
+	AdjustmentWindowLimit   float64
+	UpdatedAt               time.Time
+	Version                 int64
 }
 
-func NewGate(id, name string, maxAperture, initialAperture float64, now time.Time) (Gate, error) {
+// AdjustmentWindowEnabled reports whether the gate caps cumulative aperture
+// travel inside a sliding window. Both settings must be present together.
+func (g Gate) AdjustmentWindowEnabled() bool {
+	return g.AdjustmentWindowSeconds > 0 && g.AdjustmentWindowLimit > 0
+}
+
+func (g Gate) AdjustmentWindow() time.Duration {
+	return time.Duration(g.AdjustmentWindowSeconds) * time.Second
+}
+
+func NewGate(
+	id, name string,
+	maxAperture, initialAperture float64,
+	adjustmentWindowSeconds int64,
+	adjustmentWindowLimit float64,
+	now time.Time,
+) (Gate, error) {
 	id = strings.TrimSpace(id)
 	if !gateIDPattern.MatchString(id) {
 		return Gate{}, Invalid("invalid_gate_id", "gate id must use lowercase letters, digits, and hyphens")
@@ -44,16 +62,48 @@ func NewGate(id, name string, maxAperture, initialAperture float64, now time.Tim
 	if initialAperture < 0 || initialAperture > maxAperture {
 		return Gate{}, Invalid("invalid_initial_aperture", "initial aperture must be within the gate limit")
 	}
+	if err := validateAdjustmentWindow(adjustmentWindowSeconds, adjustmentWindowLimit); err != nil {
+		return Gate{}, err
+	}
 
 	return Gate{
-		ID:          id,
-		Name:        name,
-		Status:      GateIdle,
-		Aperture:    initialAperture,
-		MaxAperture: maxAperture,
-		UpdatedAt:   now.UTC(),
-		Version:     1,
+		ID:                      id,
+		Name:                    name,
+		Status:                  GateIdle,
+		Aperture:                initialAperture,
+		MaxAperture:             maxAperture,
+		AdjustmentWindowSeconds: adjustmentWindowSeconds,
+		AdjustmentWindowLimit:   adjustmentWindowLimit,
+		UpdatedAt:               now.UTC(),
+		Version:                 1,
 	}, nil
+}
+
+// validateAdjustmentWindow requires the window duration and the cumulative
+// travel limit to be configured together. A gate without either setting
+// simply runs without window enforcement.
+func validateAdjustmentWindow(windowSeconds int64, windowLimit float64) error {
+	if windowSeconds < 0 {
+		return Invalid("invalid_adjustment_window_seconds", "adjustment window seconds cannot be negative")
+	}
+	if windowLimit < 0 {
+		return Invalid("invalid_adjustment_window_limit", "adjustment window limit cannot be negative")
+	}
+	hasWindow := windowSeconds > 0
+	hasLimit := windowLimit > 0
+	if !hasWindow && !hasLimit {
+		return nil
+	}
+	if !hasWindow {
+		return Invalid("invalid_adjustment_window_seconds", "adjustment window seconds must be greater than zero when a limit is set")
+	}
+	if windowSeconds > MaxAdjustmentWindowSeconds {
+		return Invalid("invalid_adjustment_window_seconds", "adjustment window seconds exceed the allowed maximum")
+	}
+	if !hasLimit {
+		return Invalid("invalid_adjustment_window_limit", "adjustment window limit must be greater than zero when a window is set")
+	}
+	return nil
 }
 
 func (g *Gate) Reserve(commandID string, now time.Time) error {

@@ -13,14 +13,16 @@ type InterlockDecisionView struct {
 }
 
 type GateView struct {
-	ID              string  `json:"id"`
-	Name            string  `json:"name"`
-	Status          string  `json:"status"`
-	Aperture        float64 `json:"aperture"`
-	MaxAperture     float64 `json:"max_aperture"`
-	ActiveCommandID string  `json:"active_command_id,omitempty"`
-	UpdatedAt       string  `json:"updated_at"`
-	Version         int64   `json:"version"`
+	ID                      string  `json:"id"`
+	Name                    string  `json:"name"`
+	Status                  string  `json:"status"`
+	Aperture                float64 `json:"aperture"`
+	MaxAperture             float64 `json:"max_aperture"`
+	ActiveCommandID         string  `json:"active_command_id,omitempty"`
+	AdjustmentWindowSeconds int64   `json:"adjustment_window_seconds,omitempty"`
+	AdjustmentWindowLimit   float64 `json:"adjustment_window_limit,omitempty"`
+	UpdatedAt               string  `json:"updated_at"`
+	Version                 int64   `json:"version"`
 }
 
 type CommandView struct {
@@ -38,6 +40,32 @@ type CommandView struct {
 	CreatedAt        string                 `json:"created_at"`
 	UpdatedAt        string                 `json:"updated_at"`
 	Version          int64                  `json:"version"`
+}
+
+// AdjustmentFactView is one already-effective execution fact. Released facts
+// stay visible so the history behind a window decision stays explainable.
+type AdjustmentFactView struct {
+	CommandID        string  `json:"command_id"`
+	StartingAperture float64 `json:"starting_aperture"`
+	FinalAperture    float64 `json:"final_aperture"`
+	Amount           float64 `json:"amount"`
+	Outcome          string  `json:"outcome"`
+	EffectiveAt      string  `json:"effective_at"`
+}
+
+type AdjustmentWindowView struct {
+	GateID      string               `json:"gate_id"`
+	Enabled     bool                 `json:"enabled"`
+	Window      map[string]any       `json:"window"`
+	Used        float64              `json:"used,omitempty"`
+	Remaining   float64              `json:"remaining,omitempty"`
+	Effective   []AdjustmentFactView `json:"effective_facts"`
+	Released    []AdjustmentFactView `json:"released_facts"`
+	EvaluatedAt string               `json:"evaluated_at"`
+}
+
+type AdjustmentWindowResponse struct {
+	Window AdjustmentWindowView `json:"adjustment_window"`
 }
 
 type RegisterGateResponse struct {

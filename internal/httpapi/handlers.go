@@ -34,6 +34,20 @@ func (h *handler) gate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, contracts.GateResponse{Gate: gateView(gate)})
 }
 
+func (h *handler) adjustmentWindow(w http.ResponseWriter, r *http.Request) {
+	gateID := r.PathValue("id")
+	status, err := h.service.AdjustmentWindow(r.Context(), gateID)
+	if err != nil {
+		writeDomainError(w, err)
+		return
+	}
+	writeJSON(
+		w,
+		http.StatusOK,
+		contracts.AdjustmentWindowResponse{Window: adjustmentWindowView(gateID, status)},
+	)
+}
+
 func (h *handler) requestCommand(w http.ResponseWriter, r *http.Request) {
 	var request contracts.RequestCommandRequest
 	if err := decodeJSON(w, r, &request); err != nil {

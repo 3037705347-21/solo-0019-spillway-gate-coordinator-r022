@@ -16,6 +16,7 @@ func NewRouter(service *coordination.Service) http.Handler {
 	mux.HandleFunc("GET /health", h.health)
 	mux.HandleFunc("POST /gates", h.registerGate)
 	mux.HandleFunc("GET /gates/{id}", h.gate)
+	mux.HandleFunc("GET /gates/{id}/adjustment-window", h.adjustmentWindow)
 	mux.HandleFunc("POST /commands", h.requestCommand)
 	mux.HandleFunc("GET /commands/{id}", h.command)
 	mux.HandleFunc("POST /commands/{id}/interlock", h.reviewInterlock)

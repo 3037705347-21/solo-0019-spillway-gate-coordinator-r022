@@ -124,6 +124,28 @@
         "storage",
         "contracts"
       ]
+    },
+    {
+      "id": "adjustment-window",
+      "name": "Enforce sliding aperture adjustment window",
+      "entry": "POST /commands and POST /commands/{id}/interlock, observed via GET /gates/{id}/adjustment-window",
+      "steps": [
+        "register a gate with a sliding window duration and a cumulative aperture travel limit",
+        "admit or reject new requests and clear reviews against facts already effective in the window",
+        "record completed and aborted executions as effective facts under the repository lock",
+        "project effective and released facts, used capacity and remaining capacity"
+      ],
+      "success": "exact-limit moves pass; over-window requests and clear reviews are rejected without an occupation, token or version bump; capacity returns when facts age out and the released history stays visible",
+      "failure": "returns stable adjustment_window_exceeded conflicts, and concurrent review/execution scheduling cannot drive cumulative effective travel past the limit",
+      "verification": "workflowcheck covers request-time rejection, review-time rejection, exact boundary, real window release, aborted-fact counting and a review/execute race",
+      "module_ids": [
+        "entrypoint",
+        "httpapi",
+        "coordination",
+        "domain",
+        "storage",
+        "contracts"
+      ]
     }
   ],
   "complexity": {

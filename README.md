@@ -2,6 +2,8 @@
 
 这是一个无外部依赖的 Go 后端，用本地内存仓库协调闸门登记、开度调整命令、安全联锁复核和执行结果。服务强调单闸门活动命令互斥、原子状态转换、执行令牌生命周期和稳定错误传播。
 
+闸门可配置滑动开度调整窗口：在窗口时长内，按**已生效执行事实**累计开度行程（双向均按绝对调整量），累计加候选超过安全上限的新申请或 clear 复核会以 `adjustment_window_exceeded` 冲突被拒绝；被拒绝的请求不占用闸门、不签发令牌、不推进版本。事实滑出窗口后容量真实释放，历史在窗口投影中仍可查。
+
 ## 运行
 
 ```sh
@@ -16,6 +18,7 @@ go run ./cmd/server --addr 127.0.0.1:18119
 ```text
 POST /gates
 GET  /gates/{id}
+GET  /gates/{id}/adjustment-window
 POST /commands
 GET  /commands/{id}
 POST /commands/{id}/interlock
@@ -32,6 +35,21 @@ POST /commands/{id}/execute
   "initial_aperture": 0.5
 }
 ```
+
+可选地为闸门启用调整窗口（时长秒数与累计行程上限必须同时提供）：
+
+```json
+{
+  "id": "gate-east",
+  "name": "东侧泄洪闸",
+  "max_aperture": 4.5,
+  "initial_aperture": 0.5,
+  "adjustment_window_seconds": 3600,
+  "adjustment_window_limit": 1.0
+}
+```
+
+`GET /gates/{id}/adjustment-window` 返回窗口配置、`used`/`remaining`、窗口内 `effective_facts` 以及已释放容量的 `released_facts`（含 completed 与 aborted outcome），用于解释合法边界、真实释放和已完成历史。
 
 提交命令示例：
 
@@ -82,6 +100,7 @@ go run ./cmd/workflowcheck --workflow register-gate
 go run ./cmd/workflowcheck --workflow request-gate-command
 go run ./cmd/workflowcheck --workflow review-safety-interlock
 go run ./cmd/workflowcheck --workflow execute-gate-command
+go run ./cmd/workflowcheck --workflow adjustment-window
 ```
 
 这些检查会创建临时 HTTP 服务并调用真实路由。它们不调用外部网络，也不依赖数据库。

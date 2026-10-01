@@ -34,7 +34,10 @@ func (s *Service) RequestCommand(
 	if err != nil {
 		return domain.GateCommand{}, err
 	}
-	if err := s.repository.CreateCommand(ctx, command); err != nil {
+	// The window is re-checked by the repository while it holds the write
+	// lock, against effective facts only. A request that would exceed the
+	// limit is rejected here without ever storing the command.
+	if err := s.repository.CreateCommand(ctx, command, s.now()); err != nil {
 		return domain.GateCommand{}, err
 	}
 	return command, nil
@@ -59,18 +62,10 @@ func (s *Service) ReviewInterlock(
 		return domain.GateCommand{}, domain.Gate{}, err
 	}
 
-	token := ""
-	if decision.IsClear() {
-		token, err = s.newToken()
-		if err != nil {
-			return domain.GateCommand{}, domain.Gate{}, domain.Internal(
-				"execution_token_generation_failed",
-				"execution token could not be generated",
-			)
-		}
-	}
-
-	return s.repository.ReviewCommand(ctx, commandID, decision, token, s.now())
+	// The token is issued inside the repository critical section, only after
+	// the sliding-window admission and the gate reservation have both
+	// succeeded, so a window rejection never mints or stores a credential.
+	return s.repository.ReviewCommand(ctx, commandID, decision, s.newToken, s.now())
 }
 
 func (s *Service) ExecuteCommand(
