@@ -13,6 +13,8 @@ func (s *Service) RegisterGate(ctx context.Context, request contracts.RegisterGa
 		request.Name,
 		request.MaxAperture,
 		request.InitialAperture,
+		request.AdjustmentWindowSeconds,
+		request.MaxWindowAdjustment,
 		s.now(),
 	)
 	if err != nil {
@@ -26,4 +28,11 @@ func (s *Service) RegisterGate(ctx context.Context, request contracts.RegisterGa
 
 func (s *Service) Gate(ctx context.Context, id string) (domain.Gate, error) {
 	return s.repository.Gate(ctx, id)
+}
+
+func (s *Service) AdjustmentWindow(
+	ctx context.Context,
+	gateID string,
+) (domain.Gate, domain.AdjustmentWindowSnapshot, error) {
+	return s.repository.AdjustmentWindow(ctx, gateID)
 }

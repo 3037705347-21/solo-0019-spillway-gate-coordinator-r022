@@ -16,22 +16,27 @@ go run ./cmd/server --addr 127.0.0.1:18119
 ```text
 POST /gates
 GET  /gates/{id}
+GET  /gates/{id}/adjustment-window
 POST /commands
 GET  /commands/{id}
 POST /commands/{id}/interlock
 POST /commands/{id}/execute
 ```
 
-登记闸门示例：
+登记闸门示例（可选配置值班周期开度调整窗口：窗口秒数与累计调整上限必须同时提供，省略即不限制）：
 
 ```json
 {
   "id": "gate-east",
   "name": "东侧泄洪闸",
   "max_aperture": 4.5,
-  "initial_aperture": 0.5
+  "initial_aperture": 0.5,
+  "adjustment_window_seconds": 3600,
+  "max_window_adjustment": 1.0
 }
 ```
+
+调整窗口只按**已生效执行事实**累计（完成或故障中止且闸门已 settle 的命令，按起始/最终开度的绝对调整量）。滑动窗口为半开区间 `(now-window, now]`，事实随时间自然滑出即释放额度。新申请与 clear 复核都会在仓库临界区内基于锁内时刻重算窗口；累计超过上限返回稳定冲突码 `adjustment_window_exceeded`，被拒绝请求不落库、不签发令牌、不占用闸门、不推进版本。`GET /gates/{id}/adjustment-window` 返回上限、已用、可用、窗口边界和构成已用量的事实明细。
 
 提交命令示例：
 
@@ -82,10 +87,15 @@ go run ./cmd/workflowcheck --workflow register-gate
 go run ./cmd/workflowcheck --workflow request-gate-command
 go run ./cmd/workflowcheck --workflow review-safety-interlock
 go run ./cmd/workflowcheck --workflow execute-gate-command
+go run ./cmd/workflowcheck --workflow adjustment-window
 ```
 
 这些检查会创建临时 HTTP 服务并调用真实路由。它们不调用外部网络，也不依赖数据库。
 
-## 测试状态
+## 测试
 
-测试有意延后。当前交付仅包含初始化基线和生产级 smoke 检查；后续任务阶段会添加自动化测试与红绿验证，不应把当前没有测试文件视为项目未完成。
+窗口域规则与仓库级原子性由 Go 单元测试覆盖，包含 `-race` 下的复核/执行并发场景：
+
+```sh
+go test -race ./...
+```

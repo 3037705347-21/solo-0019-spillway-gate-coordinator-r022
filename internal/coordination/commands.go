@@ -59,18 +59,11 @@ func (s *Service) ReviewInterlock(
 		return domain.GateCommand{}, domain.Gate{}, err
 	}
 
-	token := ""
-	if decision.IsClear() {
-		token, err = s.newToken()
-		if err != nil {
-			return domain.GateCommand{}, domain.Gate{}, domain.Internal(
-				"execution_token_generation_failed",
-				"execution token could not be generated",
-			)
-		}
-	}
-
-	return s.repository.ReviewCommand(ctx, commandID, decision, token, s.now())
+	// The token is minted inside the repository critical section and only
+	// after window admission succeeds, so a rejected clear review can never
+	// return a credential. The repository also restamps the review instant
+	// under its lock so window accounting cannot race a queued transaction.
+	return s.repository.ReviewCommand(ctx, commandID, decision, s.newToken)
 }
 
 func (s *Service) ExecuteCommand(
@@ -84,6 +77,5 @@ func (s *Service) ExecuteCommand(
 		request.Token,
 		request.Operator,
 		request.SimulateFault,
-		s.now(),
 	)
 }

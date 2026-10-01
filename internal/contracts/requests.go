@@ -1,10 +1,12 @@
 package contracts
 
 type RegisterGateRequest struct {
-	ID              string  `json:"id"`
-	Name            string  `json:"name"`
-	MaxAperture     float64 `json:"max_aperture"`
-	InitialAperture float64 `json:"initial_aperture"`
+	ID                      string  `json:"id"`
+	Name                    string  `json:"name"`
+	MaxAperture             float64 `json:"max_aperture"`
+	InitialAperture         float64 `json:"initial_aperture"`
+	AdjustmentWindowSeconds int64   `json:"adjustment_window_seconds,omitempty"`
+	MaxWindowAdjustment     float64 `json:"max_window_adjustment,omitempty"`
 }
 
 type RequestCommandRequest struct {

@@ -21,6 +21,8 @@ type GateCommand struct {
 	GateID           string
 	TargetAperture   float64
 	StartingAperture float64
+	FinalAperture    float64
+	Adjustment       float64
 	Reason           string
 	RequestedBy      string
 	Status           CommandStatus
@@ -28,6 +30,7 @@ type GateCommand struct {
 	ExecutionToken   string
 	ExecutedBy       string
 	TerminalReason   string
+	ExecutedAt       *time.Time
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	Version          int64
@@ -88,8 +91,8 @@ func NewGateCommand(
 }
 
 func (c *GateCommand) Review(decision InterlockDecision, token string, now time.Time) error {
-	if c.Status != CommandPending {
-		return Conflict("command_not_pending", "only pending commands can be reviewed")
+	if err := c.CanReview(); err != nil {
+		return err
 	}
 
 	decisionCopy := decision
@@ -109,6 +112,21 @@ func (c *GateCommand) Review(decision InterlockDecision, token string, now time.
 
 	c.ExecutionToken = ""
 	c.Status = CommandRejected
+	return nil
+}
+
+// CanReportClear decides whether a clear interlock verdict may still be
+// applied to the command, without mutating it. The repository calls it
+// before any token issuance or window accounting so that a rejected review
+// never reserves the gate, issues a credential or advances the version.
+func (c *GateCommand) CanReportClear() error {
+	return c.CanReview()
+}
+
+func (c *GateCommand) CanReview() error {
+	if c.Status != CommandPending {
+		return Conflict("command_not_pending", "only pending commands can be reviewed")
+	}
 	return nil
 }
 
@@ -139,6 +157,24 @@ func (c *GateCommand) Complete(now time.Time) error {
 	c.Status = CommandCompleted
 	c.UpdatedAt = now.UTC()
 	c.Version++
+	return nil
+}
+
+// RecordExecutionResult captures the effective execution fact while the
+// command is moving. It records the final aperture the gate settled at and
+// the real travel from the aperture movement started at, which is what the
+// duty window accumulates; abort-after-settle is still a physical fact.
+func (c *GateCommand) RecordExecutionResult(startAperture, finalAperture float64, now time.Time) error {
+	if c.Status != CommandExecuting {
+		return Conflict("command_not_executing", "command is not executing")
+	}
+	if finalAperture < 0 {
+		return Invalid("invalid_final_aperture", "final aperture must be within the gate limit")
+	}
+	executedAt := now.UTC()
+	c.FinalAperture = finalAperture
+	c.Adjustment = AdjustmentMagnitude(startAperture, finalAperture)
+	c.ExecutedAt = &executedAt
 	return nil
 }
 

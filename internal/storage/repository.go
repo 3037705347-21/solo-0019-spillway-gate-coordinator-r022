@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"time"
 
 	"example.com/spillway-gate-coordinator/internal/domain"
 )
@@ -16,15 +15,14 @@ type Repository interface {
 		ctx context.Context,
 		commandID string,
 		decision domain.InterlockDecision,
-		token string,
-		now time.Time,
+		mintToken func() (string, error),
 	) (domain.GateCommand, domain.Gate, error)
+	AdjustmentWindow(ctx context.Context, gateID string) (domain.Gate, domain.AdjustmentWindowSnapshot, error)
 	ExecuteCommand(
 		ctx context.Context,
 		commandID string,
 		token string,
 		operator string,
 		simulateFault bool,
-		now time.Time,
 	) (domain.GateCommand, domain.Gate, error)
 }
